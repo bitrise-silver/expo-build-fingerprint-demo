@@ -74,9 +74,9 @@ workflows:
       - gradle-runner@5:
           title: Build Android APK
           inputs:
-            - project_root_dir: android
+            - build_root_directory: android
             - gradle_task: assembleRelease
-            - gradlew_path: android/gradlew
+            - gradlew_path: gradlew
       - save-cache@1:
           title: Save Expo export + Android build for next time (cache miss only)
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
@@ -90,5 +90,5 @@ workflows:
       - deploy-to-bitrise-io@2: {}
     meta:
       bitrise.io:
-        stack: linux-docker-android-22.04
-        machine_type_id: g2.linux.medium
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large
