@@ -38,7 +38,7 @@ workflows:
             - file_paths: |-
                 package.json
                 package-lock.json
-            - key_prefix: expo-build-skip
+            - key_prefix: build-fingerprint
             - verbose: "true"
       - restore-cache@3:
           title: Restore cached Expo export

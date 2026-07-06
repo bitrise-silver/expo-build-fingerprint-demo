@@ -14,7 +14,7 @@ step via the [`git::` source format](https://docs.bitrise.io/en/bitrise-ci/refer
       - file_paths: |-
           package.json
           package-lock.json
-      - key_prefix: expo-build-skip
+      - key_prefix: build-fingerprint
 - restore-cache@2:
     inputs:
       - key: $BUNDLE_HASH_STRING
