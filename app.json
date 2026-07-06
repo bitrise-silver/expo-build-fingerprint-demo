@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "expo-build-skip-demo",
-    "slug": "expo-build-skip-demo",
+    "name": "expo-build-fingerprint",
+    "slug": "expo-build-fingerprint",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "io.bitrise.silver.expobuildskipdemo"
+      "bundleIdentifier": "io.bitrise.silver.expobuildfingerprint"
     },
     "android": {
-      "package": "io.bitrise.silver.expobuildskipdemo"
+      "package": "io.bitrise.silver.expobuildfingerprint"
     }
   }
 }

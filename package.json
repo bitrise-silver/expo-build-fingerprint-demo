@@ -1,5 +1,5 @@
 {
-  "name": "expo-build-skip-demo",
+  "name": "expo-build-fingerprint",
   "version": "1.0.0",
   "main": "index.ts",
   "private": true,
