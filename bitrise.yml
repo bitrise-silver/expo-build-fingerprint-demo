@@ -15,15 +15,20 @@ trigger_map:
 workflows:
   build_fingerprint:
     summary: |
-      Fingerprints the dependency files into a cache key, restores that key, and only
-      runs `expo export` when restore-cache reports a miss.
+      Fingerprints the NATIVE build inputs. On a cache hit it reuses the prebuilt APK by swapping
+      in a freshly built JS bundle and re-signing — skipping the slow Gradle build entirely.
     description: |
-      Demonstrates the free Bitrise key-value cache "build skip" pattern for Expo:
-        1. steps-react-native-fingerprint fingerprints the deps into BUNDLE_HASH_STRING.
-        2. restore-cache tries that key and reports the result in BITRISE_CACHE_HIT.
-        3. `expo export` runs only on a miss; the export is saved under BUNDLE_HASH_STRING.
-      When only App.tsx changes, the dependency fingerprint is unchanged, so subsequent builds
-      hit the cache and skip re-exporting.
+      Native-skip pattern for Expo / Android:
+        1. steps-react-native-fingerprint hashes the *native* inputs (package.json, package-lock.json,
+           app.json) into BUNDLE_HASH_STRING. JS source (App.tsx) is deliberately NOT part of the key.
+        2. restore-cache tries that key and reports BITRISE_CACHE_HIT.
+        3. MISS  → expo prebuild + `gradle assembleRelease`; the signed APK and Expo's debug keystore
+                   are cached under BUNDLE_HASH_STRING.
+        4. HIT   → rebuild ONLY the JS bundle (Hermes), swap assets/index.android.bundle inside the
+                   cached APK, zipalign + re-sign. No Gradle, no native compile.
+
+      So a JS-only change (App.tsx) leaves the native fingerprint unchanged and takes the fast HIT
+      path; a dependency or app.json change busts the key and does a full native build once.
     steps:
       - git-clone@8: {}
       - restore-npm-cache@3: {}
@@ -33,58 +38,103 @@ workflows:
             - command: ci
       - save-npm-cache@1: {}
       - git::https://github.com/bitrise-silver/steps-react-native-fingerprint.git@main:
-          title: Fingerprint deps → cache key
+          title: Fingerprint native inputs → cache key
           inputs:
             - file_paths: |-
                 package.json
                 package-lock.json
+                app.json
             - key_prefix: build-fingerprint
             - verbose: "true"
       - restore-cache@3:
-          title: Restore cached Expo export
+          title: Restore cached APK (native build)
           inputs:
             - key: $BUNDLE_HASH_STRING
+
+      # ---------------- MISS: full native build (slow, runs once per native change) --------------
       - script@1:
-          title: Expo export (cache miss only)
+          title: "[miss] Expo prebuild (Android)"
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
           inputs:
             - content: |-
                 #!/usr/bin/env bash
                 set -euo pipefail
-                echo "Cache miss — running expo export from scratch…"
-                npx expo export --platform android --output-dir dist
-      - script@1:
-          title: Expo prebuild Android (cache miss only)
-          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
-          inputs:
-            - content: |-
-                #!/usr/bin/env bash
-                set -euo pipefail
-                echo "Generating native Android project with expo prebuild…"
+                echo "Cache MISS — generating the native Android project…"
                 npx expo prebuild --platform android --no-install
+      - gradle-runner@5:
+          title: "[miss] Build Android APK (assembleRelease)"
+          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
+          inputs:
+            - build_root_directory: android
+            - gradle_task: assembleRelease
+            - gradlew_path: gradlew
       - script@1:
-          title: Reuse cached Expo export (cache hit only)
+          title: "[miss] Cache the signed APK + keystore"
+          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -euo pipefail
+                mkdir -p _nativecache
+                APK="$(ls android/app/build/outputs/apk/release/*.apk | head -1)"
+                cp "$APK" _nativecache/app-release.apk
+                # Expo signs the release build with android/app/debug.keystore. Cache it so the HIT
+                # path can re-sign with the identical key (stable signature across builds).
+                cp android/app/debug.keystore _nativecache/debug.keystore
+                cp _nativecache/app-release.apk "$BITRISE_DEPLOY_DIR/app-release.apk"
+                echo "Stashed $(du -h _nativecache/app-release.apk | cut -f1) APK for the cache."
+      - save-cache@1:
+          title: "[miss] Save native APK for next time"
+          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
+          inputs:
+            - key: $BUNDLE_HASH_STRING
+            - paths: _nativecache
+
+      # ---------------- HIT: reuse APK, swap JS bundle (fast) ------------------------------------
+      - script@1:
+          title: "[hit] Swap JS bundle into cached APK (skip Gradle)"
           run_if: '{{ not (enveq "BITRISE_CACHE_HIT" "false") }}'
           inputs:
             - content: |-
                 #!/usr/bin/env bash
                 set -euo pipefail
-                echo "Cache hit (BITRISE_CACHE_HIT=$BITRISE_CACHE_HIT, key=$BUNDLE_HASH_STRING) — skipping expo export."
-                ls -lh dist || true
-      - gradle-runner@5:
-          title: Build Android APK
-          inputs:
-            - build_root_directory: android
-            - gradle_task: assembleRelease
-            - gradlew_path: gradlew
-      - save-cache@1:
-          title: Save Expo export + Android build for next time (cache miss only)
-          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
-          inputs:
-            - key: $BUNDLE_HASH_STRING
-            - paths: |-
-                dist
-                android
+                echo "Cache HIT — patching a fresh JS bundle into the cached APK (no Gradle)."
+
+                SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+                BT="$(ls -d "$SDK"/build-tools/*/ | sort -V | tail -1)"
+                WORK="$(mktemp -d)"
+                OUT="$BITRISE_DEPLOY_DIR/app-release.apk"
+                mkdir -p "$WORK/assets" _bundle_res
+
+                # 1) Build the JS bundle exactly like the native build would (same command Gradle calls).
+                npx expo export:embed \
+                  --platform android \
+                  --dev false \
+                  --entry-file index.ts \
+                  --bundle-output "$WORK/assets/index.android.bundle" \
+                  --assets-dest _bundle_res
+
+                # 2) Expo/RN default to Hermes → compile the bundle to bytecode (what the APK expects).
+                HERMESC="node_modules/react-native/sdks/hermesc/linux64-bin/hermesc"
+                if [ -x "$HERMESC" ]; then
+                  echo "Hermes enabled — compiling bundle to bytecode…"
+                  "$HERMESC" -emit-binary -O -out "$WORK/assets/index.android.bundle.hbc" "$WORK/assets/index.android.bundle"
+                  mv "$WORK/assets/index.android.bundle.hbc" "$WORK/assets/index.android.bundle"
+                fi
+
+                # 3) Replace assets/index.android.bundle inside the cached APK.
+                cp _nativecache/app-release.apk "$WORK/app.apk"
+                ( cd "$WORK" && zip -q app.apk assets/index.android.bundle )
+
+                # 4) zipalign, then re-sign (modifying the zip invalidated the old signature).
+                "${BT}zipalign" -f -p 4 "$WORK/app.apk" "$WORK/app-aligned.apk"
+                "${BT}apksigner" sign \
+                  --ks _nativecache/debug.keystore \
+                  --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey \
+                  --out "$OUT" "$WORK/app-aligned.apk"
+                "${BT}apksigner" verify "$OUT"
+                echo "Re-signed APK ready at $OUT (Gradle skipped)."
+
       - deploy-to-bitrise-io@2: {}
     meta:
       bitrise.io:

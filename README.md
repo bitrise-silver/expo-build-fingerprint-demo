@@ -14,21 +14,39 @@ step via the [`git::` source format](https://docs.bitrise.io/en/bitrise-ci/refer
       - file_paths: |-
           package.json
           package-lock.json
+          app.json          # native inputs only — NOT App.tsx
       - key_prefix: build-fingerprint
-- restore-cache@2:
+- restore-cache@3:
     inputs:
       - key: $BUNDLE_HASH_STRING
 ```
 
-## What the `build_fingerprint` workflow does
+## What the `build_fingerprint` workflow does (native-skip)
 
-1. The step fingerprints `package.json` + `package-lock.json` into `BUNDLE_HASH_STRING` (the cache key).
-2. `restore-cache` tries that key and reports the outcome in **`BITRISE_CACHE_HIT`** (`exact` / `partial` / `false`).
-3. `expo export` runs **only on a miss** (`run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'`).
-4. `save-cache` stores the fresh export under `$BUNDLE_HASH_STRING` on a miss.
+The cache key is fingerprinted from the **native inputs only** (`package.json`, `package-lock.json`,
+`app.json`) — `App.tsx` is intentionally excluded.
 
-**Change only `App.tsx`** → the fingerprint is unchanged → `restore-cache` hits and `expo export` is
-skipped. **Change a dependency in `package.json`** → the fingerprint changes → it re-exports and re-caches.
+- **Cache MISS** (deps / native changed): `expo prebuild` + `gradle assembleRelease` build the APK;
+  the signed APK + Expo's debug keystore are cached under `$BUNDLE_HASH_STRING`.
+- **Cache HIT** (JS-only change): **Gradle is skipped.** A fresh JS bundle is built
+  (`expo export:embed` + Hermes), swapped into `assets/index.android.bundle` of the cached APK, then
+  `zipalign` + `apksigner` re-sign it.
+
+So a change to `App.tsx` leaves the native fingerprint unchanged → the fast hit path runs; a
+dependency or `app.json` change does one full native build, then hits again.
+
+### See the improvement
+
+1. Run the workflow once → **MISS**: full `assembleRelease` (minutes). Note the `gradle-runner` duration.
+2. Edit `App.tsx` only and push again → **HIT**: `gradle-runner` doesn't run; just bundle + swap + sign (seconds).
+3. Compare the two build times.
+
+> ⚠️ This is a demonstration of the technique. It assumes Hermes (Expo default) and swaps only the JS
+> bundle — a JS change that adds/edits `require()`d image assets would also need the `res/` assets
+> swapped. Re-signing uses the cached debug keystore, so signatures are stable across builds but this
+> isn't a production signing setup. For a managed alternative that also speeds up *native* changes
+> without APK surgery, see
+> [Bitrise Build Cache for React Native](https://bitrise.io/platform/build-cache/react-native).
 
 ## Why this matters
 
