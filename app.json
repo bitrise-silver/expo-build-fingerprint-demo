@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "expo-build-skip-demo",
+    "slug": "expo-build-skip-demo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "io.bitrise.silver.expobuildskipdemo"
+    },
+    "android": {
+      "package": "io.bitrise.silver.expobuildskipdemo"
+    }
+  }
+}
