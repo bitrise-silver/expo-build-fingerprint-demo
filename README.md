@@ -40,7 +40,10 @@ Bitrise cache steps, with no vendor lock-in. For a fully managed, compilation-le
 
 ## Run locally
 
+Uses Node.js `22.23.1` (pinned in [`.nvmrc`](.nvmrc) / [`.node-version`](.node-version) and enforced via `engines` in [`package.json`](package.json)) so local installs and CI resolve the same dependency tree.
+
 ```bash
+nvm use   # or: nvm install (picks up .nvmrc)
 npm ci
 npm run export   # writes dist/
 ```

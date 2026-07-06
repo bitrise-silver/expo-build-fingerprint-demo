@@ -3,6 +3,9 @@ format_version: "23"
 default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
 project_type: react-native
 
+tools:
+  nodejs: 22.23.1
+
 trigger_map:
   - push_branch: "*"
     workflow: build_fingerprint
@@ -23,8 +26,8 @@ workflows:
       hit the cache and skip re-exporting.
     steps:
       - git-clone@8: {}
-      - restore-npm-cache@2: {}
-      - npm@1:
+      - restore-npm-cache@3: {}
+      - npm@3:
           title: npm ci
           inputs:
             - command: ci
