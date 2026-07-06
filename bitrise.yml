@@ -52,7 +52,16 @@ workflows:
                 #!/usr/bin/env bash
                 set -euo pipefail
                 echo "Cache miss — running expo export from scratch…"
-                npx expo export --platform ios --output-dir dist
+                npx expo export --platform android --output-dir dist
+      - script@1:
+          title: Expo prebuild Android (cache miss only)
+          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -euo pipefail
+                echo "Generating native Android project with expo prebuild…"
+                npx expo prebuild --platform android --no-install
       - script@1:
           title: Reuse cached Expo export (cache hit only)
           run_if: '{{ not (enveq "BITRISE_CACHE_HIT" "false") }}'
@@ -62,12 +71,22 @@ workflows:
                 set -euo pipefail
                 echo "Cache hit (BITRISE_CACHE_HIT=$BITRISE_CACHE_HIT, key=$BUNDLE_HASH_STRING) — skipping expo export."
                 ls -lh dist || true
+      - gradle-runner@5:
+          title: Build Android APK
+          inputs:
+            - project_root_dir: android
+            - gradle_task: assembleRelease
+            - gradlew_path: android/gradlew
       - save-cache@1:
-          title: Save Expo export for next time (cache miss only)
+          title: Save Expo export + Android build for next time (cache miss only)
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
           inputs:
             - key: $BUNDLE_HASH_STRING
-            - paths: dist
+            - paths: |-
+                dist
+                android/app/build/outputs
+                android/build
+                android/.gradle
       - deploy-to-bitrise-io@2: {}
     meta:
       bitrise.io:
