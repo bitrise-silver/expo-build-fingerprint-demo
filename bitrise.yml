@@ -179,22 +179,18 @@ workflows:
           title: Restore cached simulator .app
           inputs:
             - key: $BUNDLE_HASH_STRING
-      - cocoapods-install@3: {}
-
       # ---------------- MISS: full simulator build ----------------
       - script@1:
-          title: "[miss] Expo prebuild (iOS)"
-          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
+          title: "Expo prebuild (iOS)"
           inputs:
             - content: |-
                 #!/usr/bin/env bash
                 set -euo pipefail
                 echo "Cache MISS — generating the native iOS project…"
                 npx expo prebuild --platform ios --no-install
-                # Workspace and scheme names derive from app.json; discover them for the build step.
-                WS="$(ls -d ios/*.xcworkspace | head -1)"
-                envman add --key BITRISE_PROJECT_PATH --value "$WS"
-                envman add --key BITRISE_SCHEME --value "$(basename "$WS" .xcworkspace)"
+      - cocoapods-install@3:
+          inputs:
+            - source_root_path: $BITRISE_SOURCE_DIR/ios
       - script@1:
           title: "[miss] Detect workspace + scheme (after CocoaPods)"
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
