@@ -332,14 +332,14 @@ workflows:
       - activate-build-cache-for-react-native@0:
           title: "[miss] Activate Bitrise Build Cache for React Native"
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
-      - script@1:
-          title: "[miss] Build ios (Build Cache accelerated)"
+      # Local Xcode build (no EAS). activate-build-cache-for-react-native (above) starts the
+      # Xcode cache proxy, so this xcodebuild is accelerated by Bitrise Build Cache.
+      - xcode-build-for-simulator@3:
+          title: "[miss] Build .app for iOS Simulator (Build Cache accelerated)"
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
           inputs:
-            - content: |-
-                #!/usr/bin/env bash
-                set -euo pipefail
-                bitrise-build-cache react-native run npx eas-cli build --platform ios --local
+            - configuration: Release
+            - output_dir: _iosbuild
       - script@1:
           title: "[miss] Cache the simulator .app"
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
