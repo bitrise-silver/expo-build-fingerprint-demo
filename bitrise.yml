@@ -306,16 +306,16 @@ workflows:
 
       # ---------------- MISS: full simulator build, accelerated by Bitrise Build Cache ----------------
       - script@1:
-          title: "[miss] Expo prebuild (iOS)"
-          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
+          title: "Expo prebuild (iOS)"
           inputs:
             - content: |-
                 #!/usr/bin/env bash
                 set -euo pipefail
                 echo "Cache MISS — generating the native iOS project…"
                 npx expo prebuild --platform ios --no-install
-      - cocoapods-install@2:
-          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
+      - cocoapods-install@3:
+          inputs:
+            - source_root_path: $BITRISE_SOURCE_DIR/ios
       - script@1:
           title: "[miss] Detect workspace + scheme (after CocoaPods)"
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
@@ -332,12 +332,14 @@ workflows:
       - activate-build-cache-for-react-native@0:
           title: "[miss] Activate Bitrise Build Cache for React Native"
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
-      - xcode-build-for-simulator@3:
-          title: "[miss] Build .app for iOS Simulator (Build Cache accelerated)"
+      - script@1:
+          title: "[miss] Build ios (Build Cache accelerated)"
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
           inputs:
-            - configuration: Release
-            - output_dir: _iosbuild
+            - content: |-
+                #!/usr/bin/env bash
+                set -euo pipefail
+                bitrise-build-cache react-native run npx eas-cli build --platform ios --local
       - script@1:
           title: "[miss] Cache the simulator .app"
           run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
