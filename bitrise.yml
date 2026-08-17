@@ -186,6 +186,7 @@ workflows:
                 echo "Cache MISS — generating the native iOS project…"
                 npx expo prebuild --platform ios --no-install
       - cocoapods-install@3:
+          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
           inputs:
             - source_root_path: $BITRISE_SOURCE_DIR/ios
       - script@1:
@@ -311,6 +312,7 @@ workflows:
                 echo "Cache MISS — generating the native iOS project…"
                 npx expo prebuild --platform ios --no-install
       - cocoapods-install@3:
+          run_if: '{{ enveq "BITRISE_CACHE_HIT" "false" }}'
           inputs:
             - source_root_path: $BITRISE_SOURCE_DIR/ios
       - script@1:
