@@ -5,7 +5,7 @@ export default function App() {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Build Skip Demo</Text>
+        <Text style={styles.title}>Build Skip Demo 2</Text>
         <Text style={styles.body}>
           Expo + Bitrise key-value cache. When only this JavaScript changes, CI
           reuses the cached export instead of rebuilding it.
