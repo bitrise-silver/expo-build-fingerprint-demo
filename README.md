@@ -1,20 +1,16 @@
 # Expo Build Fingerprint Demo
 
-A minimal **Expo SDK 54** app that shows how to skip work on Bitrise CI when only your
-JavaScript changed — using nothing but the free, built-in
-[key-value cache](https://docs.bitrise.io/en/bitrise-ci/dependencies-and-caching/dependencies-and-caching-overview.html).
+A minimal **Expo SDK 54** app that shows how to skip work on Bitrise CI when only your JavaScript changed — using nothing but the free, built-in [key-value cache](https://docs.bitrise.io/en/bitrise-ci/dependencies-and-caching/dependencies-and-caching-overview.html).
 
-The [`bitrise.yml`](bitrise.yml) wires up the
-[`steps-react-native-fingerprint`](https://github.com/bitrise-silver/steps-react-native-fingerprint)
-step via the [`git::` source format](https://docs.bitrise.io/en/bitrise-ci/references/steps-reference/step-reference-id-format#the-git-source):
+The [`bitrise.yml`](bitrise.yml) wires up the [`steps-react-native-fingerprint`](https://github.com/bitrise-silver/steps-react-native-fingerprint) step via the [`git::` source format](https://docs.bitrise.io/en/bitrise-ci/references/steps-reference/step-reference-id-format#the-git-source):
 
 ```yaml
-- git::https://github.com/bitrise-silver/steps-react-native-fingerprint.git@main:
+- react-native-fingerprint@0:
     inputs:
-      - file_paths: |-
+      - path_list: |-
           package.json
           package-lock.json
-          app.json          # native inputs only — NOT App.tsx
+          app.json
       - key_prefix: build-fingerprint
 - restore-cache@3:
     inputs:
@@ -23,17 +19,13 @@ step via the [`git::` source format](https://docs.bitrise.io/en/bitrise-ci/refer
 
 ## What the `build_fingerprint` workflow does (native-skip)
 
-The cache key is fingerprinted from the **native inputs only** (`package.json`, `package-lock.json`,
-`app.json`) — `App.tsx` is intentionally excluded.
+The cache key is fingerprinted from the **native inputs only** (`package.json`, `package-lock.json`, `app.json`) — `App.tsx` is intentionally excluded.
 
-- **Cache MISS** (deps / native changed): `expo prebuild` + `gradle assembleRelease` build the APK;
-  the signed APK + Expo's debug keystore are cached under `$BUNDLE_HASH_STRING`.
+- **Cache MISS** (deps / native changed): `expo prebuild` + `gradle assembleRelease` build the APK; the signed APK + Expo's debug keystore are cached under `$BUNDLE_HASH_STRING`.
 - **Cache HIT** (JS-only change): **Gradle is skipped.** A fresh JS bundle is built
-  (`expo export:embed` + Hermes), swapped into `assets/index.android.bundle` of the cached APK, then
-  `zipalign` + `apksigner` re-sign it.
+  (`expo export:embed` + Hermes), swapped into `assets/index.android.bundle` of the cached APK, then `zipalign` + `apksigner` re-sign it.
 
-So a change to `App.tsx` leaves the native fingerprint unchanged → the fast hit path runs; a
-dependency or `app.json` change does one full native build, then hits again.
+So a change to `App.tsx` leaves the native fingerprint unchanged → the fast hit path runs; a dependency or `app.json` change does one full native build, then hits again.
 
 ### See the improvement
 
@@ -50,10 +42,7 @@ dependency or `app.json` change does one full native build, then hits again.
 
 ## Why this matters
 
-This is the same "skip the build when the inputs didn't change" idea that Expo/EAS markets as
-fingerprint-based build skipping — implemented here in a few lines of portable YAML on free
-Bitrise cache steps, with no vendor lock-in. For a fully managed, compilation-level remote cache
-(Gradle, Xcode LLVM CAS, C++), see
+This is the same "skip the build when the inputs didn't change" idea that Expo/EAS markets as fingerprint-based build skipping — implemented here in a few lines of portable YAML on free Bitrise cache steps, with no vendor lock-in. For a fully managed, compilation-level remote cache (Gradle, Xcode LLVM CAS, C++), see
 [Bitrise Build Cache for React Native](https://bitrise.io/platform/build-cache/react-native).
 
 ## Run locally

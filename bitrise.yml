@@ -15,23 +15,23 @@ trigger_map:
 workflows:
 
   # ==========================================================================================
-  # Android — fingerprint-based native-skip (DIY, free key-value cache)
+  # Android — fingerprint-based native-skip
   # ==========================================================================================
   build_android_fingerprint:
     summary: |
-      Fingerprints the NATIVE build inputs. On a cache hit it reuses the prebuilt APK by swapping
+      Fingerprints the native build modules. On a cache hit it reuses the prebuilt APK by swapping
       in a freshly built JS bundle and re-signing — skipping the slow Gradle build entirely.
     description: |
       Native-skip pattern for Expo / Android:
         1. steps-react-native-fingerprint hashes the *native* inputs (package.json, package-lock.json,
-           app.json) into BUNDLE_HASH_STRING. JS source (App.tsx) is deliberately NOT part of the key.
+           app.json) into BUNDLE_HASH_STRING.
         2. restore-cache tries that key and reports BITRISE_CACHE_HIT.
         3. MISS  → expo prebuild + `gradle assembleRelease`; the signed APK and Expo's debug keystore
                    are cached under BUNDLE_HASH_STRING.
         4. HIT   → rebuild ONLY the JS bundle (Hermes), swap assets/index.android.bundle inside the
                    cached APK, zipalign + re-sign. No Gradle, no native compile.
 
-      So a JS-only change (App.tsx) leaves the native fingerprint unchanged and takes the fast HIT
+      So a JS-only change (e.g. App.tsx) leaves the native fingerprint unchanged and takes the fast HIT
       path; a dependency or app.json change busts the key and does a full native build once.
     steps:
       - git-clone@8: {}
@@ -41,15 +41,14 @@ workflows:
           inputs:
             - command: ci
       - save-npm-cache@1: {}
-      - git::https://github.com/bitrise-silver/steps-react-native-fingerprint.git@main:
+      - react-native-fingerprint@0:
           title: Fingerprint native inputs → cache key
           inputs:
-            - file_paths: |-
+            - path_list: |-
                 package.json
                 package-lock.json
                 app.json
             - key_prefix: build-fingerprint-android
-            - verbose: "true"
       - restore-cache@3:
           title: Restore cached APK (native build)
           inputs:
@@ -146,7 +145,7 @@ workflows:
         machine_type_id: g2.linux.large
 
   # ==========================================================================================
-  # iOS — fingerprint-based native-skip (DIY). Simulator build → no code signing needed.
+  # iOS — fingerprint-based native-skip
   # ==========================================================================================
   build_ios_fingerprint:
     summary: |
@@ -154,7 +153,7 @@ workflows:
       swapping in a freshly built JS bundle — skipping the Xcode build entirely. Simulator build,
       so no certificates or provisioning profiles are required.
     description: |
-      1. Fingerprint the native inputs → BUNDLE_HASH_STRING (JS excluded).
+      1. Fingerprint the native inputs → BUNDLE_HASH_STRING.
       2. restore-cache reports BITRISE_CACHE_HIT.
       3. MISS → expo prebuild (iOS) + pod install + xcode-build-for-simulator; cache the .app.
       4. HIT  → rebuild ONLY the JS bundle (Hermes), swap main.jsbundle inside the cached .app. No Xcode.
@@ -166,15 +165,14 @@ workflows:
           inputs:
             - command: ci
       - save-npm-cache@1: {}
-      - git::https://github.com/bitrise-silver/steps-react-native-fingerprint.git@main:
+      - react-native-fingerprint@0:
           title: Fingerprint native inputs → cache key
           inputs:
-            - file_paths: |-
+            - path_list: |-
                 package.json
                 package-lock.json
                 app.json
             - key_prefix: build-fingerprint-ios
-            - verbose: "true"
       - restore-cache@3:
           title: Restore cached simulator .app
           inputs:
@@ -290,10 +288,10 @@ workflows:
           inputs:
             - command: ci
       - save-npm-cache@1: {}
-      - git::https://github.com/bitrise-silver/steps-react-native-fingerprint.git@main:
+      - react-native-fingerprint@0:
           title: Fingerprint native inputs → cache key
           inputs:
-            - file_paths: |-
+            - path_list: |-
                 package.json
                 package-lock.json
                 app.json
